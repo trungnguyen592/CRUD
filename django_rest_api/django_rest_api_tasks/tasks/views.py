@@ -1,64 +1,44 @@
-from django.shortcuts import render
-# parsing data from the client
+from django.shortcuts import render, get_object_or_404
 from rest_framework.parsers import JSONParser
-# To bypass having a CSRF token
-from django.views.decorators.csrf import csrf_exempt
-# for sending response to the client
-from django.http import HttpResponse, JsonResponse
-# API definition for task
+from rest_framework.decorators import api_view, parser_classes
+from rest_framework.response import Response
+from rest_framework import status
 from .serializers import TaskSerializer
-# Task model
 from .models import Task
 
-@csrf_exempt
+@api_view(['GET', 'POST'])
+@parser_classes([JSONParser])
 def tasks(request):
-    '''
-    List all task snippets
-    '''
-    if(request.method == 'GET'):
-        # get all the tasks
+    """
+    List all tasks or create a new task.
+    """
+    if request.method == 'GET':
         tasks = Task.objects.all()
-        # serialize the task data
         serializer = TaskSerializer(tasks, many=True)
-        # return a Json response
-        return JsonResponse(serializer.data,safe=False)
-    elif(request.method == 'POST'):
-        # parse the incoming information
-        data = JSONParser().parse(request)
-        # instanciate with the serializer
-        serializer = TaskSerializer(data=data)
-        # check if the sent information is okay
-        if(serializer.is_valid()):
-            # if okay, save it on the database
+        return Response(serializer.data)
+
+    elif request.method == 'POST':
+        serializer = TaskSerializer(data=request.data)
+        if serializer.is_valid():
             serializer.save()
-            # provide a Json Response with the data that was saved
-            return JsonResponse(serializer.data, status=201)
-            # provide a Json Response with the necessary error information
-        return JsonResponse(serializer.errors, status=400)
-    
-@csrf_exempt
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['PUT', 'DELETE'])
+@parser_classes([JSONParser])
 def task_detail(request, pk):
-    try:
-        # obtain the task with the passed id.
-        task = Task.objects.get(pk=pk)
-    except:
-        # respond with a 404 error message
-        return HttpResponse(status=404)  
-    if(request.method == 'PUT'):
-        # parse the incoming information
-        data = JSONParser().parse(request)  
-        # instanciate with the serializer
-        serializer = TaskSerializer(task, data=data)
-        # check whether the sent information is okay
-        if(serializer.is_valid()):  
-            # if okay, save it on the database
-            serializer.save() 
-            # provide a JSON response with the data that was submitted
-            return JsonResponse(serializer.data, status=201)
-        # provide a JSON response with the necessary error information
-        return JsonResponse(serializer.errors, status=400)
-    elif(request.method == 'DELETE'):
-        # delete the task
-        task.delete() 
-        # return a no content response.
-        return HttpResponse(status=204)
+    """
+    Retrieve, update, or delete a task by id.
+    """
+    task = get_object_or_404(Task, pk=pk)
+
+    if request.method == 'PUT':
+        serializer = TaskSerializer(task, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    elif request.method == 'DELETE':
+        task.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
